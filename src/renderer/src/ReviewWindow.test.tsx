@@ -6,6 +6,14 @@ import { ReviewWindow, decisionForKey } from './ReviewWindow';
 
 afterEach(cleanup);
 
+const formalise: ReviewPayload = {
+  direction: 'formalise',
+  original: 'wakao! where got enough time sia',
+  result:
+    'Hi boss, due to the complexities of the tasks, would you kindly allow me to take a while longer?',
+  additions: ['due to the complexities of the tasks'],
+};
+
 const beautify: ReviewPayload = {
   direction: 'beautify',
   original: 'i dont care you need to get this done by tomorrow',
@@ -34,17 +42,28 @@ describe('decisionForKey', () => {
 
 describe('ReviewWindow', () => {
   it("renders original and result side by side with additions marked as the tool's", () => {
-    render(<ReviewWindow payload={beautify} onDecide={vi.fn()} />);
-    expect(screen.getByText(beautify.original)).toBeTruthy();
-    expect(screen.getByText(beautify.result)).toBeTruthy();
+    render(<ReviewWindow payload={formalise} onDecide={vi.fn()} />);
+    expect(screen.getByText(formalise.original)).toBeTruthy();
+    expect(screen.getByText(formalise.result)).toBeTruthy();
     const additions = screen.getByRole('complementary');
     expect(additions.textContent).toContain('Added by Formalise');
-    expect(additions.textContent).toContain(beautify.additions[0]);
+    expect(additions.textContent).toContain(formalise.additions[0]);
   });
 
-  it('Enter accepts, Esc cancels, R retries', () => {
+  it('hands Beautify payloads to the Beautify view, where Enter never accepts', () => {
     const onDecide = vi.fn();
     render(<ReviewWindow payload={beautify} onDecide={onDecide} />);
+    expect(screen.getByText(beautify.original)).toBeTruthy();
+    expect(document.querySelector('.review--beautify')).not.toBeNull();
+    fireEvent.keyDown(window, { key: 'Enter' });
+    expect(onDecide).not.toHaveBeenCalled();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onDecide.mock.calls).toEqual([['cancel']]);
+  });
+
+  it('Enter accepts, Esc cancels, R retries (Formalise)', () => {
+    const onDecide = vi.fn();
+    render(<ReviewWindow payload={formalise} onDecide={onDecide} />);
     fireEvent.keyDown(window, { key: 'Enter' });
     fireEvent.keyDown(window, { key: 'Escape' });
     fireEvent.keyDown(window, { key: 'r' });
@@ -55,7 +74,7 @@ describe('ReviewWindow', () => {
     const onDecide = vi.fn();
     render(
       <ReviewWindow
-        payload={{ ...beautify, result: '', error: 'ANTHROPIC_API_KEY is not set.' }}
+        payload={{ ...formalise, result: '', error: 'ANTHROPIC_API_KEY is not set.' }}
         onDecide={onDecide}
       />,
     );
