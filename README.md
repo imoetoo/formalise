@@ -6,7 +6,7 @@ The v1 design of record is [PLAN.md](PLAN.md). Work is tracked per phase under [
 
 ## Status
 
-Both directions run end to end against the real Claude API (`claude-sonnet-5` by default, one constant in `src/main/claude.ts`). Formalise: copy your text, press the hotkey, review the professional version with any dropped substance flagged and any invented reasoning called out, press Enter to put it on your clipboard, paste it, U to undo. Beautify: copy the message you received, press its hotkey, read it beside the softer version; nothing is written back.
+Both directions run end to end against the real Claude API (`claude-sonnet-5` by default, one constant in `src/main/claude.ts`, overridable with `ANTHROPIC_MODEL`). Formalise: copy your text, press the hotkey, review the professional version with any dropped substance flagged and any invented reasoning called out, press Enter to put it on your clipboard, paste it, U to undo. Beautify: copy the message you received, press its hotkey, read it beside the softer version; nothing is written back.
 
 Selection capture is clipboard-only for now: you copy before the hotkey and paste after accepting. Simulated Ctrl+C / Ctrl+V through a native module is phase 02. Nothing is ever sent by the tool. See `plans/` for what each phase owns and what is deliberately left out.
 
@@ -52,6 +52,10 @@ ANTHROPIC_API_KEY=
 ```
 
 `npm run doctor` reads `.env` the same way the app does and points out that shape.
+
+To use an Anthropic-compatible gateway instead of the API directly, set `ANTHROPIC_BASE_URL` to the gateway's base URL and `ANTHROPIC_API_KEY` to the key the gateway gave you; the client is built without a hard-coded URL, so the SDK simply sends requests there. The SDK appends `/v1/messages` itself, so the value is everything before `/v1`: for OpenCode Zen, whose Anthropic-compatible endpoint is `https://opencode.ai/zen/v1/messages`, that is `ANTHROPIC_BASE_URL=https://opencode.ai/zen`. If the gateway does not expose the default model id (`claude-sonnet-5`, the one constant in `src/main/claude.ts`), set `ANTHROPIC_MODEL` to the id it does expose. Both are optional and both go in the environment or in `.env`. The app and the web server print the effective model and endpoint at start-up.
+
+If your key is an organisation-level key rather than one scoped to a workspace, the API rejects every request with `400 This API key is not scoped to a workspace, so this request must include the anthropic-workspace-id header`. Either create a workspace-scoped key in the Anthropic Console, or set `ANTHROPIC_WORKSPACE_ID` (in the environment or in `.env`, next to the key) to your workspace's id; the app then sends it as the `anthropic-workspace-id` header on every request. With a workspace-scoped key leave it unset.
 
 ### Windows
 
@@ -114,6 +118,30 @@ Flow, Formalise: select your text and copy it (`Ctrl/Cmd+C`), press the hotkey, 
 
 Flow, Beautify: copy the message you received, press the hotkey, read the softer version beside the original. `Esc` closes, `R` retries; there is no accept and nothing is written back.
 
+## Web mode
+
+For people who do not have their own Claude API key. The person who has the key runs a small web server on their machine; anyone who can reach it opens the page in a browser, pastes text into the box, picks Formalise or Beautify and reviews the result. The key stays on the host and is never sent to the browser. Nothing pasted is stored or logged.
+
+Start it from source, or build once and run the bundle:
+
+```sh
+npm run web                          # from source, http://127.0.0.1:8787
+npm run build:web && npm run web:start   # built bundle in out/web/
+```
+
+The server prints the URLs it is reachable at. By default it binds `127.0.0.1`, so only your own browser can reach it. To share it with other people on your network:
+
+```sh
+npm run web -- --host 0.0.0.0        # or FORMALISE_WEB_HOST=0.0.0.0
+npm run web -- --port 9000           # or FORMALISE_WEB_PORT=9000
+```
+
+Exposing it means everyone who can reach that address rewrites with your `ANTHROPIC_API_KEY` and your quota. There is no login: do this only on a network you trust, and stop the server (`Ctrl+C`) when you are done. The key (and `ANTHROPIC_WORKSPACE_ID`, `ANTHROPIC_BASE_URL` or `ANTHROPIC_MODEL` if you need them; see Setup) is read from your environment or your `.env` with the same loader as the desktop app; the page and its script never see it, and every response is checked so the key value cannot appear in it. To keep one shared page from burning the quota by accident, the server accepts at most 4000 characters per request, 6 rewrites a minute per device and 4 rewrites in flight at once, and it refuses requests that another web page tried to make through a visitor's browser.
+
+The paste workflow: paste your message into the text box, choose **Formalise** (your own words, made professional) or **Beautify** (a message you received, read softer), press **Rewrite**. The result appears beside your original with the same review as the desktop window: substance the rewrite dropped is flagged in red, everything Formalise added is marked and listed as its own, and an invented reason is called out louder than a greeting. For Formalise, **Copy result** puts the professional version on your clipboard for pasting (on a plain-http LAN address the browser may refuse; the page then says so and you select and copy by hand). For Beautify there is no copy and nothing is written back: their actual words stay on the left. If the host has no key, cannot reach the API, or the API errors, the page says so in plain words and your text in the box is left exactly as you pasted it.
+
+Limits and things deliberately left out (authentication, HTTPS, hosting outside your network, history) are recorded in `plans/07-web-mode.plan.md`.
+
 ## Troubleshooting
 
 **`Error: Electron uninstall` from `npm run dev`.** electron-vite could not find
@@ -135,6 +163,11 @@ project `esbuild` and `electron` already are; if the warning names another packa
 run `npm install-scripts approve <pkg>` then `npm rebuild <pkg>`.
 
 **`npm run doctor` reports esbuild failing.** Run `npm rebuild esbuild`.
+
+**The app says your key "is an organisation-level key that is not scoped to a workspace".** The API
+answered `400 ... must include the anthropic-workspace-id header`. Create a workspace-scoped key in
+the Anthropic Console and use that, or set `ANTHROPIC_WORKSPACE_ID` to the workspace's id (shell or
+`.env`) and restart. Nothing was sent and your text was left untouched.
 
 **The app says `ANTHROPIC_API_KEY is not set` although `.env` exists.** Open `.env`: the key must be
 on the same line as `ANTHROPIC_API_KEY=`, with no quotes and nothing on the following line. In
@@ -158,7 +191,8 @@ Layout:
 - `src/main/` Electron main process: `claude.ts` (Claude client), `prompts/` (one prompt per direction), `substanceCheck.ts`, `selection.ts` (clipboard-backed capture and write path), `formalise.ts` and `beautify.ts` (the two flows), `undo.ts`, `settings.ts`, `hotkeys.ts`, `window.ts`.
 - `src/preload/` the only bridge the renderer gets (`window.formalise`).
 - `src/renderer/` React review window: `formalise/FormaliseReview.tsx` and `BeautifyView.tsx`.
-- `src/shared/` types and IPC channel names used on both sides.
+- `src/shared/` types and IPC channel names used on both sides, and `segment.ts`, the addition marker both the renderer and the web server use.
+- `src/web/` web mode: `server.ts` (the HTTP server and `POST /api/rewrite` over the same engine), `cli.ts` (`npm run web`), `public/` (the paste-box page, plain HTML/JS/CSS served as-is). Bundled by `vite.web.config.ts` into `out/web/` for `npm run web:start`.
 - `test/fixtures/acceptance.json` the two PLAN.md §4 examples. `test/acceptance.test.ts` and `test/beautify.acceptance.test.ts` run them through the real engine when `ANTHROPIC_API_KEY` is set and skip otherwise, judging substance survival and register rather than exact text.
 
-CI (`.github/workflows/ci.yml`) runs install, lint, format check, typecheck, tests and build on every pull request and on pushes to `main`.
+CI (`.github/workflows/ci.yml`) runs install, lint, format check, typecheck, tests, the Electron build and the web-mode build on every pull request and on pushes to `main`.

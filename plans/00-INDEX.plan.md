@@ -10,3 +10,4 @@ Every phase of Formalise, in order. Format and rules: `AGENTS.md`. Design of rec
 | 04 | `04-review-window.plan.md` | IN_PROGRESS | Review window wired end to end for Formalise, with undo |
 | 05 | `05-beautify.plan.md` | IN_PROGRESS | Beautify side by side with marked encouragement, never written back |
 | 06 | `06-install-ergonomics.plan.md` | DONE | Fresh clone installs and starts first time: npm 12 `allowScripts`, `npm run doctor`, Windows setup notes |
+| 07 | `07-web-mode.plan.md` | IN_PROGRESS | Web mode: a localhost paste-box page over the same engine so people without a key can use the host's, key never sent to the browser |
