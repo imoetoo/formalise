@@ -2,12 +2,13 @@ import { useCallback, useEffect, useState } from 'react';
 import type { ReviewDecision, ReviewPayload } from '../../shared/types';
 import { ReviewWindow } from './ReviewWindow';
 
+/** Shown until the main process sends the real idle payload with the configured hotkeys. */
 const IDLE: ReviewPayload = {
   direction: 'formalise',
+  status: 'idle',
   original: '',
   result: '',
   additions: [],
-  error: 'Waiting for a hotkey. Ctrl/Cmd+Shift+F formalises, Ctrl/Cmd+Shift+B beautifies.',
 };
 
 export function App(): React.JSX.Element {

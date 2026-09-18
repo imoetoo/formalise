@@ -14,7 +14,7 @@ export function createReviewWindow(): BrowserWindow {
   }
   const win = new BrowserWindow({
     width: 960,
-    height: 540,
+    height: 560,
     show: false,
     autoHideMenuBar: true,
     title: 'Formalise',
@@ -53,14 +53,30 @@ app.on('before-quit', () => {
   quitting = true;
 });
 
+/** Send `payload` to the renderer once it is able to receive it. */
+function send(win: BrowserWindow, payload: ReviewPayload): void {
+  if (win.webContents.isLoading()) {
+    win.webContents.once('did-finish-load', () => {
+      win.webContents.send(IPC.reviewShow, payload);
+    });
+    return;
+  }
+  win.webContents.send(IPC.reviewShow, payload);
+}
+
 /** Show the review window with `payload`. */
 export function showReview(payload: ReviewPayload): void {
   const win = createReviewWindow();
-  win.webContents.send(IPC.reviewShow, payload);
+  send(win, payload);
   if (!win.isVisible()) {
     win.show();
   }
   win.focus();
+}
+
+/** Update what the window shows without bringing it up (the idle screen, for instance). */
+export function primeReview(payload: ReviewPayload): void {
+  send(createReviewWindow(), payload);
 }
 
 export function hideReview(): void {

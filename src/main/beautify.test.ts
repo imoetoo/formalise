@@ -30,6 +30,12 @@ const OUTCOME: RewriteOutcome = {
   output:
     'I really appreciate all that you have done for me so far. I understand time might be tight, but would you kindly do this by tomorrow?',
   additions: ['I really appreciate all that you have done for me so far'],
+  additionDetails: [
+    { kind: 'framing', text: 'I really appreciate all that you have done for me so far' },
+  ],
+  reasoning: [],
+  substance: { ok: true, found: [], missing: [] },
+  model: 'claude-sonnet-5-test',
 };
 const CLEAN: SubstanceReport = { ok: true, found: [], missing: [] };
 
@@ -153,9 +159,10 @@ describe('createBeautifyController', () => {
 
 describe('no write-back path (PLAN.md §3)', () => {
   it('the full flow through the real clipboard reader never writes to the clipboard', async () => {
-    const { readSelectionFromClipboard } = await import('./clipboardSelection');
+    const { createClipboardSelection } = await import('./selection');
     clipboardMock.readText.mockResolvedValue(ORIGINAL);
-    const deps = fakeDeps({ readSelection: readSelectionFromClipboard });
+    const adapter = createClipboardSelection(clipboardMock);
+    const deps = fakeDeps({ readSelection: () => adapter.readSelection() });
     const controller = createBeautifyController(deps);
 
     await controller.trigger();
@@ -177,11 +184,9 @@ describe('no write-back path (PLAN.md §3)', () => {
   it('the Beautify modules contain no clipboard write or selection replacement', async () => {
     const { readFile } = await import('node:fs/promises');
     const sources = await Promise.all(
-      [
-        'src/main/beautify.ts',
-        'src/main/clipboardSelection.ts',
-        'src/renderer/src/BeautifyView.tsx',
-      ].map((path) => readFile(path, 'utf8')),
+      ['src/main/beautify.ts', 'src/renderer/src/BeautifyView.tsx'].map((path) =>
+        readFile(path, 'utf8'),
+      ),
     );
     for (const source of sources) {
       expect(source).not.toMatch(/clipboard\.write/);

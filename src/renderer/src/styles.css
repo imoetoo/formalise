@@ -142,3 +142,49 @@ kbd {
   opacity: 0.75;
   margin-right: 4px;
 }
+
+/* Formalise: the flow's notices and the split between framing and invented reasoning
+   (PLAN.md §4, "Careful"). */
+.notice {
+  margin: 0;
+  padding: 8px 14px;
+  border-left: 4px solid #2e7d32;
+  background: color-mix(in srgb, #2e7d32 10%, transparent);
+  border-radius: 0 8px 8px 0;
+}
+
+kbd[aria-disabled='true'] {
+  opacity: 0.4;
+}
+
+.additions h3 {
+  margin: 8px 0 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.additions__reasoning h3 {
+  color: #b26a00;
+}
+
+.tool-added--reasoning {
+  background: color-mix(in srgb, #b26a00 18%, transparent);
+  border-bottom-color: #b26a00;
+  border-bottom-style: solid;
+}
+
+.missing__help {
+  margin: 6px 0 0;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+[aria-busy='true'] {
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}

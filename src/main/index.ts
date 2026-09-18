@@ -1,33 +1,34 @@
-import { app, ipcMain } from 'electron';
+import { app, clipboard, ipcMain } from 'electron';
 import { createBeautifyController } from './beautify';
-import { readSelectionFromClipboard } from './clipboardSelection';
+import { createFormaliseController } from './formalise';
 import { registerHotkeys, unregisterHotkeys } from './hotkeys';
-import { createReviewWindow, hideReview, showReview } from './window';
-import { HOTKEYS, IPC, type Direction, type ReviewDecision } from '../shared/types';
+import { createClipboardSelection } from './selection';
+import { loadSettings } from './settings';
+import { createReviewWindow, hideReview, primeReview, showReview } from './window';
+import { formatAccelerator } from '../shared/accelerator';
+import { DIRECTIONS, IPC, type Direction, type ReviewDecision } from '../shared/types';
 
-// Beautify (phase 05): read the selection, show it beside the softer reading, never write back.
-// Selection capture is the interim clipboard read until phase 02's abstraction lands.
+// One selection path for both directions (src/main/selection.ts). Beautify is handed only the
+// read half so it has no way to write anything back (PLAN.md §3).
+const selection = createClipboardSelection(clipboard);
+
 const beautify = createBeautifyController({
-  readSelection: readSelectionFromClipboard,
+  readSelection: () => selection.readSelection(),
   show: showReview,
 });
 
-// Formalise, phase 01: the hotkey only logs and opens the review window with an empty result.
-// Selection capture is phase 02; the rewrite itself is phase 03 (see plans/).
+// Filled in once settings are loaded, after app.whenReady().
+let formalise = createFormaliseController({ selection, show: showReview, hide: hideReview });
+
 function onHotkey(direction: Direction): void {
-  console.log(`[formalise] hotkey ${HOTKEYS[direction]} -> ${direction}`);
+  console.log(`[formalise] hotkey -> ${direction}`);
   if (direction === 'beautify') {
+    formalise.deactivate();
     void beautify.trigger();
     return;
   }
   beautify.deactivate();
-  showReview({
-    direction,
-    original: '',
-    result: '',
-    additions: [],
-    error: 'Selection capture and the Claude client are not wired yet (phase 01 scaffold).',
-  });
+  void formalise.trigger();
 }
 
 function onDecision(decision: ReviewDecision): void {
@@ -43,8 +44,20 @@ function onDecision(decision: ReviewDecision): void {
     hideReview();
     return;
   }
-  // Phase 04 wires accept (replace selection) and retry (re-run). Nothing is ever sent.
-  hideReview();
+  switch (decision) {
+    case 'accept':
+      void formalise.accept();
+      return;
+    case 'retry':
+      void formalise.retry();
+      return;
+    case 'undo':
+      void formalise.undo();
+      return;
+    case 'cancel':
+      formalise.cancel();
+      return;
+  }
 }
 
 const gotLock = app.requestSingleInstanceLock();
@@ -53,15 +66,50 @@ if (!gotLock) {
 } else {
   void app.whenReady().then(() => {
     createReviewWindow();
-    const { registered, failed } = registerHotkeys(onHotkey);
+
+    const loaded = loadSettings(app.getPath('userData'));
+    if (loaded.created) {
+      console.log(`[formalise] wrote default settings to ${loaded.path}`);
+    }
+    for (const problem of loaded.problems) {
+      console.error(`[formalise] settings: ${problem}`);
+    }
+    const hotkeys = loaded.settings.hotkeys;
+    formalise = createFormaliseController({
+      selection,
+      show: showReview,
+      hide: hideReview,
+      hotkeys,
+    });
+
+    const { registered, failed } = registerHotkeys(onHotkey, hotkeys);
     for (const direction of registered) {
-      console.log(`[formalise] registered ${HOTKEYS[direction]} for ${direction}`);
+      console.log(`[formalise] registered ${hotkeys[direction]} for ${direction}`);
     }
-    for (const direction of failed) {
-      console.error(
-        `[formalise] could not register ${HOTKEYS[direction]} for ${direction}; another app owns it`,
+    const complaints = [
+      ...failed.map(
+        (direction) =>
+          `Could not register ${formatAccelerator(hotkeys[direction])} for ${direction}; another application owns it.`,
+      ),
+      ...loaded.problems.map((problem) => `Settings: ${problem}`),
+    ];
+    if (complaints.length > 0) {
+      for (const direction of failed) {
+        console.error(`[formalise] could not register ${hotkeys[direction]} for ${direction}`);
+      }
+      const working = DIRECTIONS.filter((d) => registered.includes(d))
+        .map((d) => `${formatAccelerator(hotkeys[d])} (${d})`)
+        .join(', ');
+      showReview(
+        formalise.idle(
+          `${complaints.join(' ')} Edit the hotkeys in ${loaded.path} and restart Formalise.` +
+            (working === '' ? '' : ` Working now: ${working}.`),
+        ),
       );
+    } else {
+      primeReview(formalise.idle());
     }
+
     ipcMain.on(IPC.reviewDecision, (_event, decision: ReviewDecision) => {
       onDecision(decision);
     });

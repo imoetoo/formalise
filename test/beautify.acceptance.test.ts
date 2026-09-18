@@ -2,12 +2,11 @@
  * LIVE acceptance for the PLAN.md §4 Beautify example (plans/05-beautify.plan.md, T7).
  *
  * Runs the fixture through the real `rewrite()` and `substanceCheck()`. Needs ANTHROPIC_API_KEY;
- * without it the whole file is skipped, never failed. While the engine is still the phase 01
- * stub (NotImplementedError) each test skips itself and says so. The judgement is a rubric, not
- * exact equality: the owner's `expected` text is a target for register, not a required string.
+ * without it the whole file is skipped, never failed. The judgement is a rubric, not exact
+ * equality: the owner's `expected` text is a target for register, not a required string.
  */
 import { describe, expect, it } from 'vitest';
-import { API_KEY_ENV, NotImplementedError, rewrite, type RewriteOutcome } from '../src/main/claude';
+import { API_KEY_ENV, rewrite, type RewriteOutcome } from '../src/main/claude';
 import { substanceCheck } from '../src/main/substanceCheck';
 import fixtures from './fixtures/acceptance.json';
 
@@ -44,16 +43,8 @@ function outcome(): Promise<RewriteOutcome> {
 }
 
 describe.skipIf(!hasKey)('beautify live acceptance (PLAN.md §4)', () => {
-  async function run(ctx: { skip: (note?: string) => void }): Promise<RewriteOutcome | null> {
-    try {
-      return await outcome();
-    } catch (error) {
-      if (error instanceof NotImplementedError) {
-        ctx.skip('engine is still the phase 01 stub; see plans/03-claude-client.plan.md');
-        return null;
-      }
-      throw error;
-    }
+  async function run(_ctx: unknown): Promise<RewriteOutcome | null> {
+    return outcome();
   }
 
   it('keeps the deadline: "tomorrow" survives (§4 point 3)', async (ctx) => {
