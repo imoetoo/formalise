@@ -6,7 +6,9 @@ The v1 design of record is [PLAN.md](PLAN.md). Work is tracked per phase under [
 
 ## Status
 
-Phase 01 (bootstrap) only. The hotkeys register and open the review window, but selection capture, the Claude client and the rewrite itself are stubs. Nothing is sent anywhere yet. See `plans/01-bootstrap.plan.md` for what is deliberately left out and which phase owns it.
+Both directions run end to end against the real Claude API (`claude-sonnet-5` by default, one constant in `src/main/claude.ts`). Formalise: copy your text, press the hotkey, review the professional version with any dropped substance flagged and any invented reasoning called out, press Enter to put it on your clipboard, paste it, U to undo. Beautify: copy the message you received, press its hotkey, read it beside the softer version; nothing is written back.
+
+Selection capture is clipboard-only for now: you copy before the hotkey and paste after accepting. Simulated Ctrl+C / Ctrl+V through a native module is phase 02. Nothing is ever sent by the tool. See `plans/` for what each phase owns and what is deliberately left out.
 
 ## Stack
 
@@ -32,14 +34,31 @@ npm run build    # production bundles into out/
 npm run start    # run the production build
 ```
 
-Hotkeys (Electron accelerator syntax, defined in `src/shared/types.ts`):
+Default hotkeys (Electron accelerator syntax, defaults in `src/shared/types.ts`):
 
-| Action    | Hotkey                 |
-| --------- | ---------------------- |
-| Formalise | `Ctrl/Cmd + Shift + F` |
-| Beautify  | `Ctrl/Cmd + Shift + B` |
+| Action    | Hotkey                       |
+| --------- | ---------------------------- |
+| Formalise | `Ctrl/Cmd + Alt + Shift + F` |
+| Beautify  | `Ctrl/Cmd + Alt + Shift + B` |
 
-In the review window: `Enter` accepts, `Esc` cancels, `R` retries. Enter does nothing while there is no result, so an empty rewrite can never replace your text.
+Why not something shorter: WhatsApp Web owns `Ctrl+Shift+F` (search in chat) and `Ctrl+Shift+B` (block), and Outlook owns `Ctrl+Alt+F` (forward as attachment), so the obvious chords collide with the very apps the tool targets. On Windows keyboards that use AltGr, `Ctrl+Alt+<key>` chords can type characters; if yours does, change the hotkeys.
+
+Hotkeys are configurable. On first run the app writes `settings.json` into Electron's user-data directory (Linux `~/.config/formalise/`, macOS `~/Library/Application Support/formalise/`, Windows `%APPDATA%\formalise\`):
+
+```json
+{
+  "hotkeys": {
+    "formalise": "CommandOrControl+Alt+Shift+F",
+    "beautify": "CommandOrControl+Alt+Shift+B"
+  }
+}
+```
+
+Values must be Electron accelerators with at least one modifier. An invalid value falls back to the default, and a hotkey another application already owns is reported in the review window together with the path of the file to edit. Restart after editing.
+
+Flow, Formalise: select your text and copy it (`Ctrl/Cmd+C`), press the hotkey, review. `Enter` copies the professional version to your clipboard for pasting, `Esc` cancels, `R` retries, `U` undoes the last accepted rewrite (the last five are kept in memory). Enter does nothing while there is no result, so an empty rewrite can never replace your text. The window flags substance the rewrite dropped (an ask, deadline, constraint, number or stated position) and lists everything the tool added, with any invented reason marked separately.
+
+Flow, Beautify: copy the message you received, press the hotkey, read the softer version beside the original. `Esc` closes, `R` retries; there is no accept and nothing is written back.
 
 ## Develop
 
@@ -54,10 +73,10 @@ npm run test:watch
 
 Layout:
 
-- `src/main/` Electron main process: hotkeys, review window, Claude client stub, substance check stub.
+- `src/main/` Electron main process: `claude.ts` (Claude client), `prompts/` (one prompt per direction), `substanceCheck.ts`, `selection.ts` (clipboard-backed capture and write path), `formalise.ts` and `beautify.ts` (the two flows), `undo.ts`, `settings.ts`, `hotkeys.ts`, `window.ts`.
 - `src/preload/` the only bridge the renderer gets (`window.formalise`).
-- `src/renderer/` React review window.
+- `src/renderer/` React review window: `formalise/FormaliseReview.tsx` and `BeautifyView.tsx`.
 - `src/shared/` types and IPC channel names used on both sides.
-- `test/fixtures/acceptance.json` the two PLAN.md §4 examples; `test/acceptance.test.ts` is the acceptance harness (shape-only until phase 03 wires the engine).
+- `test/fixtures/acceptance.json` the two PLAN.md §4 examples. `test/acceptance.test.ts` and `test/beautify.acceptance.test.ts` run them through the real engine when `ANTHROPIC_API_KEY` is set and skip otherwise, judging substance survival and register rather than exact text.
 
 CI (`.github/workflows/ci.yml`) runs install, lint, format check, typecheck, tests and build on every pull request and on pushes to `main`.

@@ -10,12 +10,16 @@ export interface HotkeyRegistration {
 /**
  * Register the two global shortcuts. Must be called after `app.whenReady()`.
  *
- * Phase 01: the handler only receives the direction. Capturing the selected text is phase 02.
+ * `accelerators` are the user's configured hotkeys (`src/main/settings.ts`); the defaults are
+ * `HOTKEYS`. A failed direction is returned, never swallowed, so the caller can show it.
  */
-export function registerHotkeys(onTrigger: (direction: Direction) => void): HotkeyRegistration {
+export function registerHotkeys(
+  onTrigger: (direction: Direction) => void,
+  accelerators: Readonly<Record<Direction, string>> = HOTKEYS,
+): HotkeyRegistration {
   const result: HotkeyRegistration = { registered: [], failed: [] };
   for (const direction of DIRECTIONS) {
-    const accelerator = HOTKEYS[direction];
+    const accelerator = accelerators[direction];
     const ok = globalShortcut.register(accelerator, () => {
       onTrigger(direction);
     });

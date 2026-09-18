@@ -30,7 +30,11 @@ Project-intrinsic knowledge for any agent working in this repo. The v1 design of
 - Beautify never writes back; added encouragement is always attributed to the tool
   (`PLAN.md` §3).
 - No native modules (robotjs, nut-js) until the hotkey path is proven; see
-  `plans/02-hotkey-selection.plan.md`.
+  `plans/02-hotkey-selection.plan.md`. Until then capture and replacement are clipboard-only
+  through `src/main/selection.ts`; Beautify is handed only its read half.
+- Hotkey defaults avoid chords WhatsApp Web, Telegram Web and Outlook bind; the record of what
+  was checked is in `plans/02-hotkey-selection.plan.md`. Users override them in `settings.json`
+  (`src/main/settings.ts`).
 
 ## Plan file format
 
@@ -63,9 +67,16 @@ index whenever a phase's Status changes.
 
 - Commands: see `scripts` in `package.json`. `npm run check` runs lint, format check,
   typecheck and tests, which is what CI runs (`.github/workflows/ci.yml`).
-- Layout: `src/main` (Electron main: hotkeys, window, Claude client, substance check),
-  `src/preload` (IPC bridge), `src/renderer` (React review window), `src/shared` (types and
-  IPC channel names used on both sides), `test/` (fixtures and the acceptance harness).
+- Layout: `src/main` (Electron main: hotkeys, settings, window, Claude client in `claude.ts`,
+  one prompt per direction in `prompts/`, substance check, the two flows in `formalise.ts` and
+  `beautify.ts`, selection abstraction in `selection.ts`), `src/preload` (IPC bridge),
+  `src/renderer` (React review window, one component per direction), `src/shared` (types and
+  IPC channel names used on both sides), `test/` (fixtures and the acceptance harnesses).
+- The model is named once, `DEFAULT_MODEL` in `src/main/claude.ts`. Every engine error is a
+  `RewriteError` from `src/main/errors.ts`; callers show its message and touch nothing.
+- Live acceptance tests need `ANTHROPIC_API_KEY` and skip without it; CI has no key, so a prompt
+  change is only proven by running them locally with a key and recording the result in the
+  phase log.
 - Unit tests sit next to the code as `*.test.ts(x)`. Renderer tests declare
   `// @vitest-environment jsdom` at the top of the file.
 

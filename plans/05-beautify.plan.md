@@ -32,9 +32,13 @@ any added encouragement as the tool's own (`PLAN.md` §3). The §4 Beautify exam
 - Formalise flow, Claude client internals and the substance-check implementation: phase 03/04 on the parallel branch.
 - Native keystroke simulation for selection capture: phase 02.
 - Packaging.
-- When `src/main/selection.ts` lands from phase 02/03, swap `readSelection` in `src/main/index.ts` to it and delete `src/main/clipboardSelection.ts`.
+- (done 2026-09-18 on the Formalise branch) `readSelection` now comes from `src/main/selection.ts`; `clipboardSelection.ts` deleted.
 
 ## Log
+- 2026-09-18 — From the Formalise branch: the real client now drives Beautify through
+  `src/main/prompts/beautifyAdapter.ts` (this phase's prompt and reply schema unchanged; the
+  additions map to kind `framing`). `test/beautify.acceptance.test.ts` no longer needs its
+  stub-skip and runs whenever a key is present; it has not yet been run with one.
 - 2026-09-18 — T1–T6 implemented and green: `npm run check` (51 tests passed, 5 live tests
   skipped, 7 todo) and `npm run build`. `test/beautify.acceptance.test.ts` verified to skip,
   not fail, with a key present against the stub engine. Electron 44's `clipboard` API is
