@@ -1,6 +1,6 @@
 # 01 — Bootstrap
 
-Status: IN_PROGRESS
+Status: DONE
 Depends on: none
 
 ## Goal
@@ -18,7 +18,7 @@ logic and no network call.
 - [x] T6 — `src/main/substanceCheck.ts` stub with signature and placeholder tests. Test: `npx vitest run src/main/substanceCheck.test.ts`
 - [x] T7 — Review window skeleton: original and result side by side, Enter accept, Esc cancel, R retry. Test: `npx vitest run src/renderer/src/ReviewWindow.test.tsx`
 - [x] T8 — Acceptance fixtures from `PLAN.md` §4 and a shape-only harness. Test: `npx vitest run test/acceptance.test.ts`
-- [ ] T9 — CI workflow runs install, lint, format check, typecheck, test, build on push and PR. Test: green check on the bootstrap PR
+- [x] T9 — CI workflow runs install, lint, format check, typecheck, test, build on push and PR. Test: green check on the bootstrap PR
 - [x] T10 — README with setup and run instructions. Test: a fresh clone can follow it to `npm run dev`
 
 ## Follow-ups
@@ -31,6 +31,8 @@ Deliberately out of scope for this phase, each owned by a later phase:
 - Wire the acceptance harness in `test/acceptance.test.ts` to the real engine (03).
 
 ## Log
+- 2026-09-18 — CI green on https://github.com/imoetoo/formalise/pull/1 (lint, format check,
+  typecheck, test, build on ubuntu-latest). Phase closed; T4's named test is owed as 02/T0.
 - 2026-09-18 — Scaffold complete. Compatibility pins worth knowing: electron-vite 5 tops out at
   Vite 7 (not 8), so `@vitejs/plugin-react` is pinned to 5.x; typescript-eslint needs TypeScript
   below 6.1, so TypeScript is pinned `~5.9`; jsdom 29 rather than 30 for Node 22.13+. electron-vite
