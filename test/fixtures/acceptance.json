@@ -1,0 +1,43 @@
+{
+  "$comment": "The two worked examples from PLAN.md §4, supplied by the owner on 2026-09-18. They define the voice; any prompt change is judged against them. Inputs stay in the language actually used (Singlish), never tidied. `expected` is the owner's reference output: a target for judgement, not a required exact match. `substance` lists what must survive the rewrite (PLAN.md §2): `kind` and `text` describe the item as it appears in the input; `evidence` lists literal fragments any acceptable output must contain, case-insensitively, to show the item survived.",
+  "cases": [
+    {
+      "id": "formalise-singlish-no-time",
+      "direction": "formalise",
+      "input": "wakao! where got enough time sia",
+      "expected": "Hi boss, Honestly, due to the complexities of the tasks, would you kindly allow me to take a while longer for this issue?",
+      "substance": [
+        {
+          "kind": "position",
+          "text": "where got enough time",
+          "evidence": ["longer"]
+        },
+        {
+          "kind": "ask",
+          "text": "more time (implied)",
+          "evidence": ["would you kindly allow"]
+        }
+      ],
+      "notes": "The expected output supplies a reason (\"due to the complexities of the tasks\") the input never stated. The review step must surface such added reasoning distinctly (PLAN.md §4, 'Careful')."
+    },
+    {
+      "id": "beautify-dismissive-tomorrow",
+      "direction": "beautify",
+      "input": "i dont care you need to get this done by tomorrow",
+      "expected": "I really appreciate all that you have done for me so far, perhaps just a little bit more. I understand time might be tight, but knowing how amazing you are, would you kindly do this by tomorrow?",
+      "substance": [
+        {
+          "kind": "deadline",
+          "text": "by tomorrow",
+          "evidence": ["tomorrow"]
+        },
+        {
+          "kind": "ask",
+          "text": "get this done",
+          "evidence": ["do this"]
+        }
+      ],
+      "notes": "The deadline outlives the warmth. Added encouragement (\"knowing how amazing you are\") is the tool's and must be marked as such (PLAN.md §3)."
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+node_modules/
+out/
+dist/
+coverage/
+package-lock.json
+# Prose is hand-wrapped; PLAN.md must stay byte-identical to its source.
+*.md
+.claude/
