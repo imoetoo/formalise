@@ -79,6 +79,12 @@ index whenever a phase's Status changes.
   phase log.
 - Unit tests sit next to the code as `*.test.ts(x)`. Renderer tests declare
   `// @vitest-environment jsdom` at the top of the file.
+- Web mode (`src/web/`, `plans/07-web-mode.plan.md`) serves a paste-box page over the same
+  engine for people without a key. It imports `src/main/claude.ts`, `prompts/`,
+  `substanceCheck.ts`, `errors.ts` and `env.ts` directly, so those must stay free of `electron`
+  imports. The server never logs or stores text and redacts the key from every response; the
+  page is plain JS under a same-origin CSP, no inline scripts. `npm run web` runs from source
+  through `tsx`; `npm run build:web` bundles it for `npm run web:start`.
 - Install gate: npm 12+ blocks dependency install scripts unless `allowScripts` in `package.json`
   approves them (`npm help install-scripts`); esbuild and electron are. Electron 44 has no
   postinstall, so its binary only exists after `node node_modules/electron/install.js`;

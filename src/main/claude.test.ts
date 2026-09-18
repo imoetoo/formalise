@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   API_KEY_ENV,
   ApiError,
+  BASE_URL_ENV,
   DEFAULT_MODEL,
+  MODEL_ENV,
   MalformedResponseError,
   MissingApiKeyError,
   NetworkError,
@@ -11,10 +13,16 @@ import {
   RewriteError,
   TimeoutError,
   UNTOUCHED,
+  WORKSPACE_HEADER,
+  WORKSPACE_ID_ENV,
+  WorkspaceScopeError,
+  describeEngineConfig,
   describeRewriteError,
+  modelFrom,
   parseRewriteResponse,
   requireApiKey,
   rewrite,
+  workspaceIdFrom,
   type RewriteClient,
 } from './claude';
 
@@ -233,6 +241,164 @@ describe('rewrite', () => {
     expect(describeRewriteError(new Anthropic.APIConnectionError({ message: 'down' }))).toMatch(
       /Could not reach/,
     );
+  });
+});
+
+describe('workspace id', () => {
+  /** A transport that answers every request with a good message and records the requests. */
+  function fakeFetch(): {
+    fetch: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+    headers: () => Headers;
+    url: () => string;
+    calls: () => number;
+  } {
+    const seen: RequestInit[] = [];
+    const urls: string[] = [];
+    return {
+      fetch: (input, init) => {
+        seen.push(init ?? {});
+        urls.push(
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
+        );
+        return Promise.resolve(
+          new Response(JSON.stringify(message()), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        );
+      },
+      headers: () => new Headers(seen[0]?.headers),
+      url: () => urls[0] ?? '',
+      calls: () => seen.length,
+    };
+  }
+
+  it('sends requests to ANTHROPIC_BASE_URL when set, so a compatible gateway can be used', async () => {
+    const transport = fakeFetch();
+    await rewrite(
+      'x',
+      'formalise',
+      { ...ENV, [BASE_URL_ENV]: 'https://opencode.ai/zen' },
+      { fetch: transport.fetch },
+    );
+    // The SDK appends /v1/messages itself, so the variable holds the part before /v1.
+    expect(transport.url()).toBe('https://opencode.ai/zen/v1/messages');
+  });
+
+  it('uses the default endpoint when the variable is unset', async () => {
+    const transport = fakeFetch();
+    await rewrite('x', 'formalise', ENV, { fetch: transport.fetch });
+    expect(transport.url()).toBe('https://api.anthropic.com/v1/messages');
+  });
+
+  it('reads ANTHROPIC_WORKSPACE_ID, ignoring blanks', () => {
+    expect(workspaceIdFrom({})).toBeUndefined();
+    expect(workspaceIdFrom({ [WORKSPACE_ID_ENV]: '   ' })).toBeUndefined();
+    expect(workspaceIdFrom({ [WORKSPACE_ID_ENV]: ' wrkspc_01 ' })).toBe('wrkspc_01');
+  });
+
+  it('sends it as the anthropic-workspace-id header on the request when set', async () => {
+    const transport = fakeFetch();
+    await rewrite(
+      'x',
+      'formalise',
+      { ...ENV, [WORKSPACE_ID_ENV]: 'wrkspc_01' },
+      { fetch: transport.fetch },
+    );
+    expect(transport.calls()).toBe(1);
+    expect(transport.headers().get(WORKSPACE_HEADER)).toBe('wrkspc_01');
+    expect(transport.headers().get('x-api-key')).toBe('sk-test');
+  });
+
+  it('sends no such header when the variable is unset', async () => {
+    const transport = fakeFetch();
+    await rewrite('x', 'formalise', ENV, { fetch: transport.fetch });
+    expect(transport.calls()).toBe(1);
+    expect(transport.headers().has(WORKSPACE_HEADER)).toBe(false);
+    expect(transport.headers().get('x-api-key')).toBe('sk-test');
+  });
+
+  it('maps the "not scoped to a workspace" 400 to WorkspaceScopeError naming both remedies', async () => {
+    const apiMessage =
+      'This API key is not scoped to a workspace, so this request must include the anthropic-workspace-id header';
+    const unscoped = fakeClient(() =>
+      Promise.reject(
+        new Anthropic.BadRequestError(
+          400,
+          { type: 'error', error: { type: 'invalid_request_error', message: apiMessage } },
+          apiMessage,
+          new Headers(),
+        ),
+      ),
+    );
+    const err = await rewrite('x', 'formalise', ENV, { client: unscoped }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(WorkspaceScopeError);
+    expect((err as WorkspaceScopeError).kind).toBe('workspace');
+    expect((err as WorkspaceScopeError).message).toContain(WORKSPACE_ID_ENV);
+    expect((err as WorkspaceScopeError).message).toMatch(/workspace-scoped key/);
+    expect((err as WorkspaceScopeError).message).toContain(UNTOUCHED);
+
+    // Any other 400 stays a plain API error.
+    const other = fakeClient(() =>
+      Promise.reject(
+        new Anthropic.BadRequestError(
+          400,
+          {
+            type: 'error',
+            error: { type: 'invalid_request_error', message: 'max_tokens too big' },
+          },
+          'max_tokens too big',
+          new Headers(),
+        ),
+      ),
+    );
+    const plain = await rewrite('x', 'formalise', ENV, { client: other }).catch((e: unknown) => e);
+    expect(plain).toBeInstanceOf(ApiError);
+    expect(plain).not.toBeInstanceOf(WorkspaceScopeError);
+  });
+});
+
+describe('model override', () => {
+  it('uses DEFAULT_MODEL unless ANTHROPIC_MODEL is a non-blank string', () => {
+    expect(modelFrom({})).toBe(DEFAULT_MODEL);
+    expect(modelFrom({ [MODEL_ENV]: '' })).toBe(DEFAULT_MODEL);
+    expect(modelFrom({ [MODEL_ENV]: '   ' })).toBe(DEFAULT_MODEL);
+    expect(modelFrom({ [MODEL_ENV]: ' claude-sonnet-4-5 ' })).toBe('claude-sonnet-4-5');
+  });
+
+  it('sends the overridden model, and a per-call model still wins over the environment', async () => {
+    const client = fakeClient(() => Promise.resolve(message()));
+    await rewrite('x', 'formalise', { ...ENV, [MODEL_ENV]: 'gateway-claude' }, { client });
+    const [params] = client.create.mock.calls[0] as [Anthropic.MessageCreateParamsNonStreaming];
+    expect(params.model).toBe('gateway-claude');
+
+    await rewrite(
+      'x',
+      'formalise',
+      { ...ENV, [MODEL_ENV]: 'gateway-claude' },
+      { client, model: 'claude-opus-5' },
+    );
+    const [second] = client.create.mock.calls[1] as [Anthropic.MessageCreateParamsNonStreaming];
+    expect(second.model).toBe('claude-opus-5');
+  });
+
+  it('describes the effective model and endpoint for the start-up log, never the key', () => {
+    const plain = describeEngineConfig(ENV).join('\n');
+    expect(plain).toContain(`model: ${DEFAULT_MODEL} (default)`);
+    expect(plain).toContain('endpoint: https://api.anthropic.com (default)');
+    expect(plain).not.toContain('sk-test');
+
+    const custom = describeEngineConfig({
+      ...ENV,
+      [MODEL_ENV]: 'gateway-claude',
+      [BASE_URL_ENV]: 'https://opencode.ai/zen',
+      [WORKSPACE_ID_ENV]: 'wrkspc_01',
+    }).join('\n');
+    expect(custom).toContain(`model: gateway-claude (from ${MODEL_ENV})`);
+    expect(custom).toContain(`endpoint: https://opencode.ai/zen (from ${BASE_URL_ENV})`);
+    expect(custom).toContain(WORKSPACE_HEADER);
+    expect(custom).not.toContain('wrkspc_01');
+    expect(custom).not.toContain('sk-test');
   });
 });
 

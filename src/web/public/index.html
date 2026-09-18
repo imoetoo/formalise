@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Formalise</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <main class="web">
+      <header class="web__header">
+        <h1>Formalise</h1>
+        <p class="web__hint">
+          Paste a message, pick a direction, review the result. The text goes only to the computer
+          running this page; the Claude key stays there and is never sent to your browser. Nothing
+          you paste is stored.
+        </p>
+      </header>
+
+      <form id="rewrite-form" class="compose" novalidate>
+        <fieldset class="direction">
+          <legend>Direction</legend>
+          <label class="direction__option">
+            <input type="radio" name="direction" value="formalise" checked />
+            <span class="direction__name">Formalise</span>
+            <span class="direction__what">your own words, made professional</span>
+          </label>
+          <label class="direction__option">
+            <input type="radio" name="direction" value="beautify" />
+            <span class="direction__name">Beautify</span>
+            <span class="direction__what">a message you received, read softer</span>
+          </label>
+        </fieldset>
+
+        <label class="compose__label" for="text">Text</label>
+        <textarea
+          id="text"
+          name="text"
+          rows="7"
+          spellcheck="false"
+          placeholder="Paste or type the message here"
+        ></textarea>
+        <div class="compose__row">
+          <span id="counter" class="compose__counter" aria-live="polite"></span>
+          <button type="submit" id="rewrite" class="button button--primary">Rewrite</button>
+        </div>
+      </form>
+
+      <section id="result" class="result" aria-live="polite"></section>
+    </main>
+  </body>
+</html>

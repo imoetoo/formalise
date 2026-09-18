@@ -26,7 +26,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/main/**/*.ts', 'src/preload/**/*.ts', 'test/**/*.ts', '*.ts'],
+    files: ['src/main/**/*.ts', 'src/preload/**/*.ts', 'src/web/**/*.ts', 'test/**/*.ts', '*.ts'],
     languageOptions: { globals: globals.node },
   },
   {
@@ -34,6 +34,16 @@ export default tseslint.config(
     languageOptions: { globals: globals.browser },
     plugins: { 'react-hooks': reactHooks },
     rules: reactHooks.configs.recommended.rules,
+  },
+  {
+    // The web page script is served as-is, so it is plain JavaScript outside every tsconfig.
+    files: ['src/web/public/**/*.js'],
+    ...tseslint.configs.disableTypeChecked,
+    languageOptions: {
+      ...tseslint.configs.disableTypeChecked.languageOptions,
+      globals: globals.browser,
+      sourceType: 'script',
+    },
   },
   {
     files: ['eslint.config.mjs', 'scripts/**/*.mjs'],

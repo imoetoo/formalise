@@ -138,3 +138,14 @@ plan (see §8, 2026-09-18).
 - 2026-09-18 — Stack changed from Java 21 / Swing to Electron + React + TypeScript, on the
   owner's request for a modern React/TypeScript stack. Electron chosen over Next.js because
   global hotkeys, clipboard/selection capture and text replacement need a desktop shell.
+- 2026-09-18 — Web mode added at the owner's request ("for those without API key, create a
+  localhost webpage that allows them to copy and paste into the txtbox"). The person who has the
+  key runs `npm run web`; anyone who can reach that machine opens the page in a browser, pastes,
+  picks Formalise or Beautify and reviews the result. It is the same engine and the same review
+  semantics as the hotkeys (§2, §3: register changes, substance does not; Beautify's additions
+  are marked as the tool's and nothing is written back; Formalise offers Copy only), exposed once
+  over HTTP. The key stays on the host and is never sent to the browser, and nothing pasted is
+  stored. The §1 scope statement stands: the hotkey utility is the product; the page is a way to
+  share one key with people who have none, on a trusted network. Limits, decisions and what is
+  deliberately left out (authentication, HTTPS, hosting beyond the LAN, history, packaging) are
+  in `plans/07-web-mode.plan.md`.

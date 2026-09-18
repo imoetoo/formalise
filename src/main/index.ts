@@ -1,5 +1,6 @@
 import { app, clipboard, ipcMain } from 'electron';
 import { createBeautifyController } from './beautify';
+import { describeEngineConfig } from './claude';
 import { dotEnvCandidates, loadDotEnv } from './env';
 import { createFormaliseController } from './formalise';
 import { registerHotkeys, unregisterHotkeys } from './hotkeys';
@@ -24,6 +25,9 @@ for (const file of dotenv.loaded) {
 }
 for (const problem of dotenv.problems) {
   console.error(`[formalise] .env: ${problem}`);
+}
+for (const line of describeEngineConfig(process.env)) {
+  console.log(`[formalise] engine ${line}`);
 }
 
 // One selection path for both directions (src/main/selection.ts). Beautify is handed only the

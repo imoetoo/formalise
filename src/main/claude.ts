@@ -8,17 +8,22 @@
  * and say why" (PLAN.md §6). The key comes from `ANTHROPIC_API_KEY` only; nothing is ever sent
  * by this module except the rewrite request itself.
  */
-import Anthropic from '@anthropic-ai/sdk';
+import Anthropic, { type ClientOptions as SdkClientOptions } from '@anthropic-ai/sdk';
 import type { Addition, Direction } from '../shared/types';
 import {
   API_KEY_ENV,
   ApiError,
+  BASE_URL_ENV,
+  MODEL_ENV,
   MalformedResponseError,
   MissingApiKeyError,
   NetworkError,
   RefusedError,
   RewriteError,
   TimeoutError,
+  WORKSPACE_HEADER,
+  WORKSPACE_ID_ENV,
+  WorkspaceScopeError,
 } from './errors';
 import { promptFor } from './prompts';
 import { substanceCheck, type SubstanceReport } from './substanceCheck';
@@ -26,6 +31,8 @@ import { substanceCheck, type SubstanceReport } from './substanceCheck';
 export {
   API_KEY_ENV,
   ApiError,
+  BASE_URL_ENV,
+  MODEL_ENV,
   MalformedResponseError,
   MissingApiKeyError,
   NetworkError,
@@ -33,11 +40,17 @@ export {
   RewriteError,
   TimeoutError,
   UNTOUCHED,
+  WORKSPACE_HEADER,
+  WORKSPACE_ID_ENV,
+  WorkspaceScopeError,
   type RewriteErrorKind,
 } from './errors';
 export { parseRewriteResponse } from './prompts';
 
-/** The one place the model is named. Override per call with `RewriteOptions.model`. */
+/**
+ * The one place the model is named. Overridden by `ANTHROPIC_MODEL` in the environment
+ * ({@link modelFrom}) or per call with `RewriteOptions.model`.
+ */
 export const DEFAULT_MODEL = 'claude-sonnet-5';
 
 /** Wall-clock bound for one request; the SDK retries connection errors within it. */
@@ -75,6 +88,8 @@ export interface RewriteClient {
 export interface RewriteOptions {
   /** Injected client, mainly for tests. Defaults to a real SDK client built from the key. */
   client?: RewriteClient;
+  /** Injected transport for the default client, for tests that need to see the HTTP request. */
+  fetch?: SdkClientOptions['fetch'];
   model?: string;
   timeoutMs?: number;
 }
@@ -88,9 +103,83 @@ export function requireApiKey(env: NodeJS.ProcessEnv = process.env): string {
   return key;
 }
 
+/** A trimmed environment variable, or undefined when unset or blank. */
+function optionalEnv(env: NodeJS.ProcessEnv, name: string): string | undefined {
+  const value = env[name]?.trim();
+  return value === undefined || value === '' ? undefined : value;
+}
+
+/** The optional workspace id (`ANTHROPIC_WORKSPACE_ID`), or undefined when unset or blank. */
+export function workspaceIdFrom(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  return optionalEnv(env, WORKSPACE_ID_ENV);
+}
+
+/** The optional gateway base URL (`ANTHROPIC_BASE_URL`), or undefined for the SDK's default. */
+export function baseUrlFrom(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  return optionalEnv(env, BASE_URL_ENV);
+}
+
+/** The model to use: `ANTHROPIC_MODEL` when set to a non-blank string, else `DEFAULT_MODEL`. */
+export function modelFrom(env: NodeJS.ProcessEnv = process.env): string {
+  return optionalEnv(env, MODEL_ENV) ?? DEFAULT_MODEL;
+}
+
+/**
+ * One line per engine setting for a start-up log, so the effective model and endpoint are
+ * visible without reading the environment by hand. Never includes the key.
+ */
+export function describeEngineConfig(env: NodeJS.ProcessEnv = process.env): string[] {
+  const model = modelFrom(env);
+  const baseUrl = baseUrlFrom(env);
+  const lines = [
+    `model: ${model}${model === DEFAULT_MODEL && optionalEnv(env, MODEL_ENV) === undefined ? ' (default)' : ` (from ${MODEL_ENV})`}`,
+    `endpoint: ${baseUrl ?? 'https://api.anthropic.com (default)'}${baseUrl === undefined ? '' : ` (from ${BASE_URL_ENV})`}`,
+  ];
+  if (workspaceIdFrom(env) !== undefined) {
+    lines.push(`workspace: ${WORKSPACE_ID_ENV} is set and sent as ${WORKSPACE_HEADER}`);
+  }
+  return lines;
+}
+
+export interface ClientOptions {
+  /** Sent as the `anthropic-workspace-id` header on every request when present. */
+  workspaceId?: string;
+  /** An Anthropic-compatible gateway; absent means the SDK's default (api.anthropic.com). */
+  baseUrl?: string;
+  fetch?: SdkClientOptions['fetch'];
+}
+
 /** A real SDK client. Retries (SDK default) stay inside the timeout budget per attempt. */
-export function createClient(apiKey: string, timeoutMs = REQUEST_TIMEOUT_MS): Anthropic {
-  return new Anthropic({ apiKey, timeout: timeoutMs, maxRetries: 2 });
+export function createClient(
+  apiKey: string,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+  options: ClientOptions = {},
+): Anthropic {
+  return new Anthropic({
+    apiKey,
+    timeout: timeoutMs,
+    maxRetries: 2,
+    ...(options.workspaceId === undefined
+      ? {}
+      : { defaultHeaders: { [WORKSPACE_HEADER]: options.workspaceId } }),
+    // Passed through from the environment only; never hard-coded, so the SDK's own default and
+    // its ANTHROPIC_BASE_URL handling stay in charge when nothing is set.
+    ...(options.baseUrl === undefined ? {} : { baseURL: options.baseUrl }),
+    ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+  });
+}
+
+function clientFor(env: NodeJS.ProcessEnv, apiKey: string, options: RewriteOptions): RewriteClient {
+  if (options.client !== undefined) {
+    return options.client;
+  }
+  const workspaceId = workspaceIdFrom(env);
+  const baseUrl = baseUrlFrom(env);
+  return createClient(apiKey, options.timeoutMs ?? REQUEST_TIMEOUT_MS, {
+    ...(workspaceId === undefined ? {} : { workspaceId }),
+    ...(baseUrl === undefined ? {} : { baseUrl }),
+    ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+  });
 }
 
 /**
@@ -107,8 +196,8 @@ export function rewrite(
 ): Promise<RewriteOutcome> {
   const apiKey = requireApiKey(env);
   const timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS;
-  const client = options.client ?? createClient(apiKey, timeoutMs);
-  const model = options.model ?? DEFAULT_MODEL;
+  const client = clientFor(env, apiKey, options);
+  const model = options.model ?? modelFrom(env);
   return performRewrite(text, direction, client, model, timeoutMs);
 }
 
@@ -161,6 +250,9 @@ async function performRewrite(
   };
 }
 
+/** The API's own wording for a key that needs a workspace id, matched loosely. */
+const WORKSPACE_SCOPE_MESSAGE = /not scoped to a workspace|anthropic-workspace-id/i;
+
 /** Map an SDK error to the typed error the UI reports. Most specific class first. */
 export function toRewriteError(error: unknown, timeoutMs: number): RewriteError {
   if (error instanceof RewriteError) {
@@ -171,6 +263,13 @@ export function toRewriteError(error: unknown, timeoutMs: number): RewriteError 
   }
   if (error instanceof Anthropic.APIConnectionError) {
     return new NetworkError(error);
+  }
+  if (
+    error instanceof Anthropic.APIError &&
+    error.status === 400 &&
+    WORKSPACE_SCOPE_MESSAGE.test(error.message)
+  ) {
+    return new WorkspaceScopeError(error);
   }
   if (error instanceof Anthropic.APIError) {
     const hint = error instanceof Anthropic.AuthenticationError ? ` Check ${API_KEY_ENV}.` : '';
