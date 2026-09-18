@@ -29,8 +29,22 @@ export interface ReviewPayload {
    * reasoning for Formalise). Rendered separately and attributed to the tool, PLAN.md §3/§4.
    */
   additions: readonly string[];
+  /**
+   * Substance the check could not find in the result (PLAN.md §2), for the window to flag.
+   * Mirrors `SubstanceReport.missing` in `src/main/substanceCheck.ts` without the renderer
+   * importing main-process code. Absent or empty when nothing went missing or no check ran.
+   */
+  missing?: readonly SubstanceFlag[];
   /** Human-readable reason when there is no result (no key, no network, API error). */
   error?: string;
+}
+
+/** One item the substance check found in the input but not in the result. */
+export interface SubstanceFlag {
+  /** ask | deadline | constraint | number | position, as the check names them. */
+  kind: string;
+  /** The item as it appears in the input. */
+  text: string;
 }
 
 /** Renderer -> main decisions. */
