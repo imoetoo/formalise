@@ -79,6 +79,11 @@ index whenever a phase's Status changes.
   phase log.
 - Unit tests sit next to the code as `*.test.ts(x)`. Renderer tests declare
   `// @vitest-environment jsdom` at the top of the file.
+- Install gate: npm 12+ blocks dependency install scripts unless `allowScripts` in `package.json`
+  approves them (`npm help install-scripts`); esbuild and electron are. Electron 44 has no
+  postinstall, so its binary only exists after `node node_modules/electron/install.js`;
+  `npm run doctor` (`scripts/doctor.mjs`, also the postinstall) checks this and prints the fix.
+  Background and decisions in `plans/06-install-ergonomics.plan.md`.
 
 ## Maintaining this file
 

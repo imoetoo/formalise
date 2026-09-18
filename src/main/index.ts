@@ -1,5 +1,6 @@
 import { app, clipboard, ipcMain } from 'electron';
 import { createBeautifyController } from './beautify';
+import { dotEnvCandidates, loadDotEnv } from './env';
 import { createFormaliseController } from './formalise';
 import { registerHotkeys, unregisterHotkeys } from './hotkeys';
 import { createClipboardSelection } from './selection';
@@ -7,6 +8,23 @@ import { loadSettings } from './settings';
 import { createReviewWindow, hideReview, primeReview, showReview } from './window';
 import { formatAccelerator } from '../shared/accelerator';
 import { DIRECTIONS, IPC, type Direction, type ReviewDecision } from '../shared/types';
+
+// `.env` first, before anything can read the environment. The real environment always wins over
+// the file (src/main/env.ts). The engine reads the key lazily, at rewrite time.
+const dotenv = loadDotEnv(
+  dotEnvCandidates({
+    isPackaged: app.isPackaged,
+    appPath: app.getAppPath(),
+    userData: app.getPath('userData'),
+    execPath: process.execPath,
+  }),
+);
+for (const file of dotenv.loaded) {
+  console.log(`[formalise] loaded ${file} (${dotenv.applied.join(', ') || 'nothing new'})`);
+}
+for (const problem of dotenv.problems) {
+  console.error(`[formalise] .env: ${problem}`);
+}
 
 // One selection path for both directions (src/main/selection.ts). Beautify is handed only the
 // read half so it has no way to write anything back (PLAN.md §3).
